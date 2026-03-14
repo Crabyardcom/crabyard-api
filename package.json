@@ -1,0 +1,22 @@
+﻿{
+  "name": "crabyard-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "db:migrate": "bun src/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "hono": "^4",
+    "postgres": "^3.4.8",
+    "resend": "^6.9.3",
+    "stripe": "^17"
+  }
+}
