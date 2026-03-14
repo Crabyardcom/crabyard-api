@@ -1,4 +1,4 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import type { Env } from "../types";

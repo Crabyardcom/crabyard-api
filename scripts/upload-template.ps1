@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory)][string]$ScaffoldDir,
     [string]$Version = "0.1.0"
 )

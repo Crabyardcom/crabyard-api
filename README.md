@@ -1,4 +1,4 @@
-﻿# Crabyard API
+# Crabyard API
 
 Cloudflare Worker API that handles license validation, template distribution, and Stripe payments for Crabyard.
 

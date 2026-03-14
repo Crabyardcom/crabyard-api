@@ -1,4 +1,4 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import type { Env, License } from "../types";
 
 export const templateRoutes = new Hono<Env>();

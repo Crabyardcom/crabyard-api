@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 SCAFFOLD_DIR="${1:?Usage: ./scripts/upload-template.sh <scaffold-dir> [version]}"
