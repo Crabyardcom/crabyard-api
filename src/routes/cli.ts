@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 
-const REPO = "tCoOpy/crabyard";
+const REPO = "tCoOpy/taurikit";
 
 export const cliRoutes = new Hono<Env>();
 
