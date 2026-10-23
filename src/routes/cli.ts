@@ -56,8 +56,9 @@ cliRoutes.get("/download/:target", async (c) => {
     return c.json({ error: "Invalid checksum parameter" }, 400);
   }
 
+  const releaseTag = version && !version.startsWith("v") ? `v${version}` : version;
   const releaseResponse = await fetchRelease(
-    version ? `tags/${encodeURIComponent(version)}` : "latest"
+    releaseTag ? `tags/${encodeURIComponent(releaseTag)}` : "latest"
   );
   if (!releaseResponse.ok) {
     return c.json(

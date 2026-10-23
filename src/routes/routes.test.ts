@@ -63,6 +63,16 @@ describe("untrusted request validation", () => {
 });
 
 describe("CLI distribution", () => {
+  test.each(["1.8.0", "v1.8.0"])("normalizes pinned release %s to the published tag", async (version) => {
+    let requested = "";
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requested = String(input);
+      return Response.json({ assets: [] });
+    }) as unknown as typeof fetch;
+    const response = await app.request(`/cli/download/x86_64-pc-windows-msvc?version=${version}`);
+    expect(response.status).toBe(404);
+    expect(requested).toBe("https://api.github.com/repos/Crabyardcom/crabyard-cli/releases/tags/v1.8.0");
+  });
   test("queries the standalone organization repository", async () => {
     let requested = "";
     globalThis.fetch = (async (input: string | URL | Request) => {
