@@ -31,7 +31,7 @@ stripeRoutes.post("/checkout", async (c) => {
     mode: "payment",
     line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
     success_url: `${siteUrl}/success`,
-    cancel_url: `${siteUrl}/#get-started`,
+    cancel_url: `${siteUrl}/#install`,
     metadata: { product: "crabyard" },
     payment_intent_data: {
       metadata: { product: "crabyard" },

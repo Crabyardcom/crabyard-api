@@ -30,7 +30,7 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: [siteUrl],
+    origin: [...new Set([siteUrl, "https://crabyard.com", "https://www.crabyard.com", "https://crabyard-web-production.up.railway.app"])],
     allowMethods: ["GET", "POST"],
     allowHeaders: ["Content-Type", "Authorization", "X-Admin-Key"],
   })

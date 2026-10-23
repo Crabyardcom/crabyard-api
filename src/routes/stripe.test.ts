@@ -129,6 +129,6 @@ test("checkout returns to the deployed site without exposing a session ID", asyn
   }) as unknown as typeof fetch;
   const response = await app.request("/stripe/checkout", { method: "POST" });
   expect(response.status).toBe(200);
-  expect(parameters.get("success_url")).toBe("https://crabyard-web-production.up.railway.app/success");
-  expect(parameters.get("cancel_url")).toBe("https://crabyard-web-production.up.railway.app/#get-started");
+  expect(parameters.get("success_url")).toBe("https://crabyard.com/success");
+  expect(parameters.get("cancel_url")).toBe("https://crabyard.com/#install");
 });

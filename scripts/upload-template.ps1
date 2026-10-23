@@ -8,7 +8,7 @@ $TempFile = Join-Path $env:TEMP $Tarball
 $ApiUrl = $env:API_URL
 $AdminKey = $env:ADMIN_KEY
 
-if (-not $ApiUrl) { throw "Set API_URL env var (e.g. https://crabyard-api-production.up.railway.app)" }
+if (-not $ApiUrl) { throw "Set API_URL env var (e.g. https://api.crabyard.com)" }
 if (-not $AdminKey) { throw "Set ADMIN_KEY env var" }
 
 Write-Host "Packaging scaffold from ${ScaffoldDir}..."
