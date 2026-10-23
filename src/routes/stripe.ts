@@ -21,7 +21,8 @@ stripeRoutes.use("/*", async (c, next) => {
 });
 
 stripeRoutes.post("/checkout", async (c) => {
-  if (!process.env.STRIPE_PRICE_ID || !process.env.CRABYARD_EMAIL_FROM?.trim()) {
+  if (!process.env.STRIPE_PRICE_ID || !process.env.CRABYARD_EMAIL_FROM?.trim() ||
+      !process.env.RESEND_API_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     return c.json({ error: "Checkout not configured" }, 503);
   }
   const stripe = getStripe();

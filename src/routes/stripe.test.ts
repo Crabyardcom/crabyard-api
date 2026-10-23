@@ -113,6 +113,13 @@ test("paid checkout and fulfillment require an explicitly configured email sende
   expect(emails).toBe(0);
 });
 
+test.each(["RESEND_API_KEY", "STRIPE_WEBHOOK_SECRET"])("checkout rejects missing %s before contacting Stripe", async (variable) => {
+  process.env.STRIPE_PRICE_ID = "price_crabyard";
+  delete process.env[variable];
+  expect((await app.request("/stripe/checkout", { method: "POST" })).status).toBe(503);
+  expect(emails).toBe(0);
+});
+
 test("checkout returns to the deployed site without exposing a session ID", async () => {
   process.env.STRIPE_PRICE_ID = "price_crabyard";
   let parameters = new URLSearchParams();
