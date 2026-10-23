@@ -11,7 +11,7 @@ bun run db:migrate
 bun run dev
 ```
 
-Set `DATABASE_URL` and a long random `ADMIN_KEY`. Stripe checkout requires `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID`. Fulfillment also requires `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` with a verified `crabyard.dev` sender. `GITHUB_TOKEN` is optional for public CLI releases; private releases require a token with read access to `Crabyardcom/crabyard-cli`.
+Set `DATABASE_URL` and a long random `ADMIN_KEY`. Stripe checkout requires `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, and an explicit `CRABYARD_EMAIL_FROM` address verified in your Resend account. Fulfillment also requires `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY`. Checkout and fulfillment stay unavailable until the sender is configured; no sender address is assumed. `GITHUB_TOKEN` is optional for public CLI releases; private releases require a token with read access to `Crabyardcom/crabyard-cli`.
 
 `CRABYARD_SITE_URL` sets the web origin used for CORS, checkout redirects, and installer links in license emails. It defaults to `https://crabyard-web-production.up.railway.app`; set it to your verified custom origin when that domain is connected.
 

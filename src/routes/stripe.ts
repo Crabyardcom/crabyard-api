@@ -21,7 +21,7 @@ stripeRoutes.use("/*", async (c, next) => {
 });
 
 stripeRoutes.post("/checkout", async (c) => {
-  if (!process.env.STRIPE_PRICE_ID) {
+  if (!process.env.STRIPE_PRICE_ID || !process.env.CRABYARD_EMAIL_FROM?.trim()) {
     return c.json({ error: "Checkout not configured" }, 503);
   }
   const stripe = getStripe();
@@ -75,7 +75,8 @@ stripeRoutes.get("/session/:sessionId", async (c) => {
 });
 
 stripeRoutes.post("/webhook", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
-  if (!process.env.STRIPE_WEBHOOK_SECRET || !process.env.RESEND_API_KEY) {
+  const emailFrom = process.env.CRABYARD_EMAIL_FROM?.trim();
+  if (!process.env.STRIPE_WEBHOOK_SECRET || !process.env.RESEND_API_KEY || !emailFrom) {
     return c.json({ error: "Fulfillment not configured" }, 503);
   }
   const stripe = getStripe();
@@ -136,7 +137,7 @@ stripeRoutes.post("/webhook", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
 
     const resend = new Resend(process.env.RESEND_API_KEY!);
     const result = await resend.emails.send({
-      from: "Crabyard <noreply@crabyard.dev>",
+      from: emailFrom,
       to: email,
       subject: "Your Crabyard License Key",
       html: `
@@ -151,7 +152,7 @@ stripeRoutes.post("/webhook", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
             <p style="color: #a1a1aa; font-size: 12px; margin: 0 0 12px;">QUICK START</p>
             <code style="display: block; color: #d4d4d8; font-size: 13px; line-height: 2;">$ curl -fsSL ${siteUrl}/install.sh | sh<br>$ export CRABYARD_LICENSE_KEY=${key}<br>$ crabyard new "My App"</code>
           </div>
-          <p style="color: #52525b; font-size: 12px; margin-top: 24px;">If you have questions, reply to this email or contact support@crabyard.dev</p>
+          <p style="color: #52525b; font-size: 12px; margin-top: 24px;">For help, visit <a href="https://github.com/Crabyardcom/crabyard-cli/issues">Crabyard support</a>.</p>
         </div>
       `,
     }, { idempotencyKey: `crabyard-license/${paymentId}` });

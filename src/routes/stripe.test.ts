@@ -6,7 +6,7 @@ import type { Env } from "../types";
 import { stripeRoutes } from "./stripe";
 
 const originalFetch = globalThis.fetch;
-const variables = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "RESEND_API_KEY"] as const;
+const variables = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "RESEND_API_KEY", "CRABYARD_EMAIL_FROM"] as const;
 const originalVariables = Object.fromEntries(variables.map((key) => [key, process.env[key]]));
 const secret = "whsec_crabyard_test";
 let license: { key: string; email_sent_at: string | null } | undefined;
@@ -36,6 +36,7 @@ beforeEach(() => {
   process.env.STRIPE_SECRET_KEY = "sk_test_crabyard";
   process.env.STRIPE_WEBHOOK_SECRET = secret;
   process.env.RESEND_API_KEY = "re_crabyard";
+  process.env.CRABYARD_EMAIL_FROM = "Crabyard Test <sender@example.com>";
   license = undefined;
   inserts = 0;
   emails = 0;
@@ -101,6 +102,15 @@ test("unsigned events cannot provision a license", async () => {
   const response = await app.request("/stripe/webhook", { method: "POST", body: "{}" });
   expect(response.status).toBe(400);
   expect(inserts).toBe(0);
+});
+
+test("paid checkout and fulfillment require an explicitly configured email sender", async () => {
+  delete process.env.CRABYARD_EMAIL_FROM;
+  process.env.STRIPE_PRICE_ID = "price_crabyard";
+  expect((await app.request("/stripe/checkout", { method: "POST" })).status).toBe(503);
+  expect((await deliver()).status).toBe(503);
+  expect(inserts).toBe(0);
+  expect(emails).toBe(0);
 });
 
 test("checkout returns to the deployed site without exposing a session ID", async () => {
