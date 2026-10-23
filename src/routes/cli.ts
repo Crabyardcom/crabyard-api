@@ -1,109 +1,100 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 
-const REPO = "tCoOpy/taurikit";
+const REPO = "Crabyardcom/crabyard-cli";
+const TARGETS = new Set([
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]);
+const VERSION = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 export const cliRoutes = new Hono<Env>();
 
-cliRoutes.get("/latest", async (c) => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    return c.json({ error: "Server misconfigured" }, 500);
+function githubHeaders(download = false): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: download ? "application/octet-stream" : "application/vnd.github+json",
+    "User-Agent": "crabyard-api",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
+  return headers;
+}
 
-  const resp = await fetch(
-    `https://api.github.com/repos/${REPO}/releases/latest`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "crabyard-api",
-      },
-    }
-  );
+async function fetchRelease(path: string) {
+  return fetch(`https://api.github.com/repos/${REPO}/releases/${path}`, {
+    headers: githubHeaders(),
+    signal: AbortSignal.timeout(15_000),
+  });
+}
 
-  if (!resp.ok) {
+cliRoutes.get("/latest", async (c) => {
+  const response = await fetchRelease("latest");
+  if (!response.ok) {
     return c.json({ error: "Failed to fetch release info" }, 502);
   }
-
-  const data = (await resp.json()) as { tag_name: string };
+  const data = (await response.json()) as { tag_name: string };
+  c.header("Cache-Control", "public, max-age=60");
   return c.json({ version: data.tag_name });
 });
 
 cliRoutes.get("/download/:target", async (c) => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    return c.json({ error: "Server misconfigured" }, 500);
-  }
-
   const target = c.req.param("target");
-  const version =
-    c.req.query("version") || (await fetchLatestVersion(token));
-
-  if (!version) {
-    return c.json({ error: "Could not determine version" }, 502);
+  if (!TARGETS.has(target)) {
+    return c.json({ error: "Unsupported release target" }, 400);
+  }
+  const version = c.req.query("version");
+  if (version !== undefined && !VERSION.test(version)) {
+    return c.json({ error: "Invalid release version" }, 400);
+  }
+  const checksum = c.req.query("checksum");
+  if (checksum !== undefined && checksum !== "1") {
+    return c.json({ error: "Invalid checksum parameter" }, 400);
   }
 
-  const ext = target.includes("windows") ? "zip" : "tar.gz";
-  const assetName = `crabyard-${target}.${ext}`;
-
-  const releaseResp = await fetch(
-    `https://api.github.com/repos/${REPO}/releases/tags/${version}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "crabyard-api",
-      },
-    }
+  const releaseResponse = await fetchRelease(
+    version ? `tags/${encodeURIComponent(version)}` : "latest"
   );
-
-  if (!releaseResp.ok) {
-    return c.json({ error: `Release ${version} not found` }, 404);
+  if (!releaseResponse.ok) {
+    return c.json(
+      { error: "Release not available" },
+      releaseResponse.status === 404 ? 404 : 502
+    );
   }
-
-  const release = (await releaseResp.json()) as {
+  const extension = target.includes("windows") ? "zip" : "tar.gz";
+  const assetName = `crabyard-${target}.${extension}${checksum ? ".sha256" : ""}`;
+  const release = (await releaseResponse.json()) as {
     assets: { name: string; url: string }[];
   };
-
-  const asset = release.assets.find((a) => a.name === assetName);
+  const asset = release.assets.find((entry) => entry.name === assetName);
   if (!asset) {
     return c.json({ error: `Asset ${assetName} not found` }, 404);
   }
 
-  const downloadResp = await fetch(asset.url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/octet-stream",
-      "User-Agent": "crabyard-api",
-    },
+  const assetUrl = new URL(asset.url);
+  if (
+    assetUrl.origin !== "https://api.github.com" ||
+    !assetUrl.pathname.toLowerCase().startsWith(`/repos/${REPO.toLowerCase()}/releases/assets/`)
+  ) {
+    return c.json({ error: "Invalid release asset URL" }, 502);
+  }
+  const download = await fetch(assetUrl, {
+    headers: githubHeaders(true),
+    signal: AbortSignal.timeout(120_000),
     redirect: "follow",
   });
-
-  if (!downloadResp.ok || !downloadResp.body) {
+  if (!download.ok || !download.body) {
     return c.json({ error: "Failed to download asset" }, 502);
   }
-
-  return new Response(downloadResp.body, {
+  return new Response(download.body, {
     headers: {
-      "Content-Type": "application/octet-stream",
+      "Content-Type": checksum ? "text/plain; charset=utf-8" : "application/octet-stream",
       "Content-Disposition": `attachment; filename="${assetName}"`,
+      "X-Content-Type-Options": "nosniff",
     },
   });
 });
-
-async function fetchLatestVersion(token: string): Promise<string | null> {
-  const resp = await fetch(
-    `https://api.github.com/repos/${REPO}/releases/latest`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "crabyard-api",
-      },
-    }
-  );
-  if (!resp.ok) return null;
-  const data = (await resp.json()) as { tag_name: string };
-  return data.tag_name;
-}

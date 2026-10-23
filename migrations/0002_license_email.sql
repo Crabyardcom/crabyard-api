@@ -1,0 +1,1 @@
+ALTER TABLE licenses ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMPTZ;

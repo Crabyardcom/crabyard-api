@@ -1,119 +1,46 @@
 # Crabyard API
 
-Cloudflare Worker API that handles license validation, template distribution, and Stripe payments for Crabyard.
+License validation, licensed template downloads, CLI release distribution, and Stripe checkout for [Crabyard](https://github.com/Crabyardcom/).
 
-## Stack
-
-- **Runtime:** Cloudflare Workers
-- **Router:** Hono
-- **Database:** Cloudflare D1
-- **Storage:** Cloudflare R2
-- **Payments:** Stripe
-- **Email:** Resend
-
-## Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/license/validate` | Validate a license key |
-| `GET` | `/template/:version` | Download template tarball (Bearer auth) |
-| `POST` | `/stripe/checkout` | Create Stripe checkout session |
-| `GET` | `/stripe/session/:id` | Get license key for a Stripe session |
-| `POST` | `/stripe/webhook` | Stripe webhook handler |
-
-## Setup
-
-### Prerequisites
-
-- [Bun](https://bun.sh) or Node.js
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`bun add -g wrangler`)
-- Cloudflare account
-- Stripe account
-- Resend account
-
-### 1. Install dependencies
+This is a standalone Bun, Hono, and PostgreSQL service. Run commands from this repository's root.
 
 ```sh
-bun install
-```
-
-### 2. Create D1 database
-
-```sh
-wrangler d1 create crabyard-db
-```
-
-Copy the `database_id` from the output into `wrangler.toml`.
-
-### 3. Run migrations
-
-```sh
-# Local
-bun run db:migrate:local
-
-# Remote (after deploy)
-bun run db:migrate:remote
-```
-
-### 4. Create R2 bucket
-
-```sh
-wrangler r2 bucket create crabyard-templates
-```
-
-### 5. Set secrets
-
-```sh
-wrangler secret put STRIPE_SECRET_KEY
-wrangler secret put STRIPE_WEBHOOK_SECRET
-wrangler secret put RESEND_API_KEY
-```
-
-### 6. Set Stripe price ID
-
-Update `STRIPE_PRICE_ID` in `wrangler.toml` with your Stripe Price ID.
-
-### 7. Upload template
-
-```sh
-# Linux/macOS
-./scripts/upload-template.sh 0.1.0
-
-# Windows
-.\scripts\upload-template.ps1 0.1.0
-```
-
-## Development
-
-```sh
+bun install --frozen-lockfile
+cp .env.example .env
+bun run db:migrate
 bun run dev
 ```
 
-Runs the Worker locally with `wrangler dev`. Uses local D1/R2 emulation.
+Set `DATABASE_URL` and a long random `ADMIN_KEY`. Stripe checkout requires `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID`. Fulfillment also requires `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` with a verified `crabyard.dev` sender. `GITHUB_TOKEN` is optional for public CLI releases; private releases require a token with read access to `Crabyardcom/crabyard-cli`.
 
-## Deploy
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Process health |
+| POST | `/license/validate` | Validate a JSON `{ "key": "..." }` license |
+| GET | `/template/:version` | Download a template with Bearer license authentication |
+| POST | `/template/upload?version=0.1.0` | Upload a gzip archive with `X-Admin-Key` (32 MiB limit) |
+| GET | `/cli/latest` | Latest CLI release tag |
+| GET | `/cli/download/:target?version=v0.1.0` | Download a supported CLI archive |
+| GET | `/cli/download/:target?version=v0.1.0&checksum=1` | Download that archive's `.sha256` sidecar |
+| POST | `/stripe/checkout` | Create a one-time checkout session |
+| GET | `/stripe/session/:id` | Retrieve the paid session's active license (session ID is a bearer secret) |
+| POST | `/stripe/webhook` | Signed Stripe fulfillment events |
+
+Configure Stripe to send `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Only paid payment sessions created for Crabyard are fulfilled. Concurrent webhook retries reuse the original license; email delivery failures return an error for Stripe to retry. Migrations add a durable email delivery marker. Existing license prefixes remain valid; new keys use `CRAB-`.
+
+Templates are built in [crabyard-templates](https://github.com/Crabyardcom/crabyard-templates). To upload a local checkout:
 
 ```sh
-bun run deploy
+API_URL=https://api.crabyard.dev ADMIN_KEY=... ./scripts/upload-template.sh /path/to/crabyard-templates 0.1.0
 ```
 
-## Project Structure
+On Windows, use `scripts/upload-template.ps1 -ScaffoldDir C:\path\to\crabyard-templates -Version 0.1.0` with the same environment variables.
 
-```
-src/
-  index.ts          # Hono app entry point + CORS
-  types.ts          # Env bindings + License interface
-  routes/
-    license.ts      # POST /license/validate
-    template.ts     # GET /template/:version
-    stripe.ts       # Checkout, session lookup, webhook
-schema.sql          # D1 table definitions
-scripts/
-  upload-template.sh    # Package + upload scaffold to R2
-  upload-template.ps1   # Windows version
+```sh
+bun run check
+bun test
+bun run build
+docker build -t crabyard-api .
 ```
 
-## License
-
-Proprietary. Part of the Crabyard product.
+Deploy the Dockerfile with this repository as its build context. Run `bun run db:migrate` as the pre-deploy command, set the health check to `/health`, and provide PostgreSQL through `DATABASE_URL`. The service binds to Railway's `PORT` or port 3000. Secrets belong in deployment variables, never in Git.

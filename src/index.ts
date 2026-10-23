@@ -1,6 +1,8 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
+import { HTTPException } from "hono/http-exception";
 import postgres from "postgres";
 import type { Env } from "./types";
 import { licenseRoutes } from "./routes/license";
@@ -8,9 +10,16 @@ import { templateRoutes } from "./routes/template";
 import { stripeRoutes } from "./routes/stripe";
 import { cliRoutes } from "./routes/cli";
 
-const sql = postgres(process.env.DATABASE_URL!);
+if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
+const sql = postgres(process.env.DATABASE_URL);
 
 const app = new Hono<Env>();
+app.use("*", secureHeaders());
+app.onError((error, c) => {
+  if (error instanceof HTTPException) return error.getResponse();
+  console.error("Request failed:", error.message);
+  return c.json({ error: "Request failed" }, 500);
+});
 
 app.use("*", async (c, next) => {
   c.set("db", sql);

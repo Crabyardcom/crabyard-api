@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import type { Env } from "../types";
@@ -19,6 +20,9 @@ stripeRoutes.use("/*", async (c, next) => {
 });
 
 stripeRoutes.post("/checkout", async (c) => {
+  if (!process.env.STRIPE_PRICE_ID) {
+    return c.json({ error: "Checkout not configured" }, 503);
+  }
   const stripe = getStripe();
 
   const session = await stripe.checkout.sessions.create({
@@ -26,6 +30,7 @@ stripeRoutes.post("/checkout", async (c) => {
     line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
     success_url: "https://crabyard.dev/success?session_id={CHECKOUT_SESSION_ID}",
     cancel_url: "https://crabyard.dev/#pricing",
+    metadata: { product: "crabyard" },
     payment_intent_data: {
       metadata: { product: "crabyard" },
     },
@@ -37,6 +42,9 @@ stripeRoutes.post("/checkout", async (c) => {
 stripeRoutes.get("/session/:sessionId", async (c) => {
   const stripe = getStripe();
   const sessionId = c.req.param("sessionId");
+  if (!/^cs_(?:test_|live_)?[A-Za-z0-9]+$/.test(sessionId)) {
+    return c.json({ error: "Invalid checkout session" }, 400);
+  }
 
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -44,7 +52,8 @@ stripeRoutes.get("/session/:sessionId", async (c) => {
     return c.json({ error: "Payment not completed" }, 402);
   }
 
-  const paymentId = session.payment_intent?.toString();
+  const paymentId = typeof session.payment_intent === "string"
+    ? session.payment_intent : session.payment_intent?.id;
   if (!paymentId) {
     return c.json({ error: "No payment found" }, 404);
   }
@@ -52,17 +61,22 @@ stripeRoutes.get("/session/:sessionId", async (c) => {
   const db = c.get("db");
 
   const [license] = await db<{ key: string; plan: string; created_at: string }[]>`
-    SELECT key, plan, created_at FROM licenses WHERE stripe_payment_id = ${paymentId}
+    SELECT key, plan, created_at FROM licenses
+    WHERE stripe_payment_id = ${paymentId} AND active = true
   `;
 
   if (!license) {
     return c.json({ error: "License not yet provisioned" }, 404);
   }
 
+  c.header("Cache-Control", "private, no-store");
   return c.json({ key: license.key, plan: license.plan });
 });
 
-stripeRoutes.post("/webhook", async (c) => {
+stripeRoutes.post("/webhook", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
+  if (!process.env.STRIPE_WEBHOOK_SECRET || !process.env.RESEND_API_KEY) {
+    return c.json({ error: "Fulfillment not configured" }, 503);
+  }
   const stripe = getStripe();
   const signature = c.req.header("stripe-signature");
 
@@ -83,31 +97,44 @@ stripeRoutes.post("/webhook", async (c) => {
     return c.json({ error: "Invalid signature" }, 400);
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
+    if (session.mode !== "payment" || session.payment_status !== "paid") {
+      return c.json({ received: true });
+    }
+    if (session.metadata?.product !== "crabyard") {
+      return c.json({ received: true });
+    }
     const email = session.customer_details?.email;
+    const paymentId = typeof session.payment_intent === "string"
+      ? session.payment_intent : session.payment_intent?.id;
 
-    if (!email) {
-      return c.json({ error: "No email in session" }, 400);
+    if (!email || !paymentId) {
+      return c.json({ error: "Missing fulfillment details" }, 400);
     }
 
-    const key = generateLicenseKey();
     const db = c.get("db");
-
-    await db`
-      INSERT INTO licenses (id, email, key, plan, stripe_customer_id, stripe_payment_id)
-      VALUES (
-        ${crypto.randomUUID()},
-        ${email},
-        ${key},
-        'standard',
-        ${session.customer?.toString() ?? null},
-        ${session.payment_intent?.toString() ?? null}
-      )
-    `;
+    const license = await db.begin(async (transaction) => {
+      await transaction.unsafe("SELECT pg_advisory_xact_lock(hashtext($1))", [paymentId]);
+      const [existing] = await transaction.unsafe<{ key: string; email_sent_at: string | null }[]>(
+        "SELECT key, email_sent_at FROM licenses WHERE stripe_payment_id = $1", [paymentId]
+      );
+      if (existing) return existing;
+      const key = generateLicenseKey();
+      const customerId = typeof session.customer === "string"
+        ? session.customer : session.customer?.id ?? null;
+      await transaction.unsafe(`
+        INSERT INTO licenses (id, email, key, plan, stripe_customer_id, stripe_payment_id)
+        VALUES ($1, $2, $3, 'standard', $4, $5)
+      `, [crypto.randomUUID(), email, key, customerId, paymentId]);
+      return { key, email_sent_at: null };
+    });
+    if (license.email_sent_at) return c.json({ received: true });
+    const key = license.key;
 
     const resend = new Resend(process.env.RESEND_API_KEY!);
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: "Crabyard <noreply@crabyard.dev>",
       to: email,
       subject: "Your Crabyard License Key",
@@ -126,7 +153,11 @@ stripeRoutes.post("/webhook", async (c) => {
           <p style="color: #52525b; font-size: 12px; margin-top: 24px;">If you have questions, reply to this email or contact support@crabyard.dev</p>
         </div>
       `,
-    });
+    }, { idempotencyKey: `crabyard-license/${paymentId}` });
+    if (result.error) {
+      return c.json({ error: "License email delivery failed" }, 502);
+    }
+    await db`UPDATE licenses SET email_sent_at = NOW() WHERE stripe_payment_id = ${paymentId}`;
   }
 
   return c.json({ received: true });
@@ -138,7 +169,7 @@ function generateLicenseKey(): string {
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
     ""
   );
-  return `TK-${chunk(hex, 8).join("-").toUpperCase()}`;
+  return `CRAB-${chunk(hex, 8).join("-").toUpperCase()}`;
 }
 
 function chunk(str: string, size: number): string[] {

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS licenses (
   stripe_customer_id TEXT,
   stripe_payment_id  TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_used         TIMESTAMPTZ
+  last_used         TIMESTAMPTZ,
+  email_sent_at     TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(key);
