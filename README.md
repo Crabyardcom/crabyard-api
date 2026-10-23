@@ -13,6 +13,8 @@ bun run dev
 
 Set `DATABASE_URL` and a long random `ADMIN_KEY`. Stripe checkout requires `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID`. Fulfillment also requires `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` with a verified `crabyard.dev` sender. `GITHUB_TOKEN` is optional for public CLI releases; private releases require a token with read access to `Crabyardcom/crabyard-cli`.
 
+`CRABYARD_SITE_URL` sets the web origin used for CORS, checkout redirects, and installer links in license emails. It defaults to `https://crabyard-web-production.up.railway.app`; set it to your verified custom origin when that domain is connected.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/health` | Process health |
@@ -31,7 +33,7 @@ Configure Stripe to send `checkout.session.completed` and `checkout.session.asyn
 Templates are built in [crabyard-templates](https://github.com/Crabyardcom/crabyard-templates). To upload a local checkout:
 
 ```sh
-API_URL=https://api.crabyard.dev ADMIN_KEY=... ./scripts/upload-template.sh /path/to/crabyard-templates 0.1.0
+API_URL=https://crabyard-api-production.up.railway.app ADMIN_KEY=... ./scripts/upload-template.sh /path/to/crabyard-templates 0.1.0
 ```
 
 On Windows, use `scripts/upload-template.ps1 -ScaffoldDir C:\path\to\crabyard-templates -Version 0.1.0` with the same environment variables.

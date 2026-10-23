@@ -6,7 +6,7 @@ import type { Env } from "../types";
 import { stripeRoutes } from "./stripe";
 
 const originalFetch = globalThis.fetch;
-const variables = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "RESEND_API_KEY"] as const;
+const variables = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID", "RESEND_API_KEY"] as const;
 const originalVariables = Object.fromEntries(variables.map((key) => [key, process.env[key]]));
 const secret = "whsec_crabyard_test";
 let license: { key: string; email_sent_at: string | null } | undefined;
@@ -101,4 +101,17 @@ test("unsigned events cannot provision a license", async () => {
   const response = await app.request("/stripe/webhook", { method: "POST", body: "{}" });
   expect(response.status).toBe(400);
   expect(inserts).toBe(0);
+});
+
+test("checkout returns to the deployed site without exposing a session ID", async () => {
+  process.env.STRIPE_PRICE_ID = "price_crabyard";
+  let parameters = new URLSearchParams();
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    parameters = new URLSearchParams(String(init?.body));
+    return Response.json({ url: "https://checkout.stripe.com/test" });
+  }) as unknown as typeof fetch;
+  const response = await app.request("/stripe/checkout", { method: "POST" });
+  expect(response.status).toBe(200);
+  expect(parameters.get("success_url")).toBe("https://crabyard-web-production.up.railway.app/success");
+  expect(parameters.get("cancel_url")).toBe("https://crabyard-web-production.up.railway.app/#get-started");
 });

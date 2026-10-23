@@ -4,7 +4,7 @@ set -euo pipefail
 SCAFFOLD_DIR="${1:?Usage: ./scripts/upload-template.sh <scaffold-dir> [version]}"
 VERSION="${2:-0.1.0}"
 TARBALL="crabyard-${VERSION}.tar.gz"
-API_URL="${API_URL:?Set API_URL env var (e.g. https://api.crabyard.dev)}"
+API_URL="${API_URL:?Set API_URL env var (e.g. https://crabyard-api-production.up.railway.app)}"
 ADMIN_KEY="${ADMIN_KEY:?Set ADMIN_KEY env var}"
 
 echo "Packaging scaffold from ${SCAFFOLD_DIR}..."

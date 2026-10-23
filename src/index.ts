@@ -9,6 +9,7 @@ import { licenseRoutes } from "./routes/license";
 import { templateRoutes } from "./routes/template";
 import { stripeRoutes } from "./routes/stripe";
 import { cliRoutes } from "./routes/cli";
+import { siteUrl } from "./config";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not configured");
 const sql = postgres(process.env.DATABASE_URL);
@@ -29,7 +30,7 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: ["https://crabyard.dev"],
+    origin: [siteUrl],
     allowMethods: ["GET", "POST"],
     allowHeaders: ["Content-Type", "Authorization", "X-Admin-Key"],
   })

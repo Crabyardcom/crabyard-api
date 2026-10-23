@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import type { Env } from "../types";
+import { siteUrl } from "../config";
 
 export const stripeRoutes = new Hono<Env>();
 
@@ -28,8 +29,8 @@ stripeRoutes.post("/checkout", async (c) => {
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     line_items: [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
-    success_url: "https://crabyard.dev/success?session_id={CHECKOUT_SESSION_ID}",
-    cancel_url: "https://crabyard.dev/#pricing",
+    success_url: `${siteUrl}/success`,
+    cancel_url: `${siteUrl}/#get-started`,
     metadata: { product: "crabyard" },
     payment_intent_data: {
       metadata: { product: "crabyard" },
@@ -148,7 +149,7 @@ stripeRoutes.post("/webhook", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
           </div>
           <div style="background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 20px;">
             <p style="color: #a1a1aa; font-size: 12px; margin: 0 0 12px;">QUICK START</p>
-            <code style="display: block; color: #d4d4d8; font-size: 13px; line-height: 2;">$ curl -fsSL https://crabyard.dev/install.sh | sh<br>$ export CRABYARD_LICENSE_KEY=${key}<br>$ crabyard new "My App"</code>
+            <code style="display: block; color: #d4d4d8; font-size: 13px; line-height: 2;">$ curl -fsSL ${siteUrl}/install.sh | sh<br>$ export CRABYARD_LICENSE_KEY=${key}<br>$ crabyard new "My App"</code>
           </div>
           <p style="color: #52525b; font-size: 12px; margin-top: 24px;">If you have questions, reply to this email or contact support@crabyard.dev</p>
         </div>
